@@ -1,27 +1,92 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <meta charset="utf-8">
-  <title>OAuth Callback</title>
-  <style>
-    body { font-family: -apple-system, sans-serif; max-width: 640px; margin: 4em auto; padding: 0 1em; }
-    code { background: #f4f4f4; padding: 0.2em 0.4em; border-radius: 3px; word-break: break-all; }
-    .box { background: #f9f9f9; border: 1px solid #ddd; padding: 1em; border-radius: 4px; margin: 1em 0; }
-  </style>
+<meta charset="utf-8">
+<title>Volvo OAuth callback</title>
+<style>
+  body { font: 14px/1.5 -apple-system,BlinkMacSystemFont,sans-serif;
+         max-width: 640px; margin: 4em auto; padding: 0 20px; color: #1f2328; }
+  h1 { font-size: 18px; }
+  .box { background: #f5f5f5; border: 1px solid #ccc; padding: 12px;
+         border-radius: 6px; font-family: ui-monospace,Menlo,monospace;
+         font-size: 13px; word-break: break-all; margin: 8px 0; }
+  button { padding: 8px 16px; background: #1565c0; color: #fff;
+           border: 0; border-radius: 4px; cursor: pointer; font-size: 14px;
+           margin-right: 6px; }
+  button:hover { background: #0d47a1; }
+  .ok   { color: #2e7d32; font-weight: 600; }
+  .warn { color: #c62828; font-weight: 600; }
+  .lbl  { font-weight: 600; margin-top: 14px; }
+</style>
 </head>
 <body>
-  <h1>OAuth Callback</h1>
-  <p>This page is the OAuth 2.0 redirect endpoint for the XC90_Telemetry_Logger application.</p>
-  <div class="box">
-    <p><strong>Authorization code:</strong></p>
-    <code id="code">—</code>
-    <p style="margin-top:1em"><strong>State:</strong> <code id="state">—</code></p>
-  </div>
-  <p>Copy the authorization code and paste it into the terminal to exchange it for an access token.</p>
-  <script>
-    const params = new URLSearchParams(window.location.search);
-    document.getElementById('code').textContent  = params.get('code')  || '(not present)';
-    document.getElementById('state').textContent = params.get('state') || '(not present)';
-  </script>
+
+<h1>Volvo OAuth Callback</h1>
+<p id="status">Processing…</p>
+<div id="info"></div>
+
+<script>
+(function () {
+  const p     = new URLSearchParams(window.location.search);
+  const code  = p.get('code');
+  const state = p.get('state');
+  const err   = p.get('error');
+  const errd  = p.get('error_description');
+
+  const $status = document.getElementById('status');
+  const $info   = document.getElementById('info');
+
+  if (err) {
+    $status.innerHTML = '<span class="warn">Volvo error: ' + (errd || err) + '</span>';
+    return;
+  }
+  if (!code) {
+    $status.innerHTML = '<span class="warn">No code in URL.</span>';
+    return;
+  }
+
+  // Always render the code so the user can copy it manually if anything below fails.
+  $info.innerHTML =
+    '<div class="lbl">Authorization code:</div>' +
+    '<div class="box" id="codebox">' + code + '</div>' +
+    '<div class="lbl">State:</div>' +
+    '<div class="box">' + state + '</div>' +
+    '<button id="copyBtn">Copy code</button>';
+
+  document.getElementById('copyBtn').addEventListener('click', function () {
+    navigator.clipboard.writeText(code).then(
+      function () { this.textContent = 'Copied ✓'; }.bind(this),
+      function () {
+        const r = document.createRange();
+        r.selectNodeContents(document.getElementById('codebox'));
+        window.getSelection().removeAllRanges();
+        window.getSelection().addRange(r);
+      }
+    );
+  });
+
+  // Try to ship the code back to the dashboard that opened us.
+  if (window.opener && !window.opener.closed) {
+    try {
+      window.opener.postMessage(
+        { type: 'volvo_oauth', code: code, state: state },
+        '*'
+      );
+      $status.innerHTML = '<span class="ok">Code sent back to dashboard. This window will close shortly.</span>';
+      setTimeout(function () {
+        try { window.close(); } catch (_) {}
+      }, 1500);
+    } catch (e) {
+      $status.innerHTML = '<span class="warn">Could not auto-send (' + e.message +
+                          '). Copy the code and paste it into the dashboard.</span>';
+    }
+  } else {
+    $status.textContent =
+      'No opener window. Copy the code below and paste it into the dashboard\'s ' +
+      '"Re-authorize" form.';
+  }
+})();
+</script>
+
 </body>
 </html>
